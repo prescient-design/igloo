@@ -7,7 +7,7 @@ from typing import Union
 import torch
 import torch.nn as nn
 from torch.nn import LayerNorm
-from model.modules import RobertaLMHead, TransformerLayer
+from .modules import RobertaLMHead, TransformerLayer
 from dataset import Alphabet, proteinseq_toks
 
 class LoopTransformer(nn.Module):

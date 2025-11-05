@@ -51,8 +51,8 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from transformers import DataCollatorForLanguageModeling
 
-from embedding_model import BertLoopModelForMaskedLM
-from constants import *
+from .embedding_model import BertLoopModelForMaskedLM
+from .constants import *
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.53.0.dev0")

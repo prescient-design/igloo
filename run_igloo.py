@@ -5,7 +5,7 @@ import torch
 import argparse
 import pandas as pd
 
-from model.vqvae import VQVAE
+from igloo.vqvae import VQVAE
 from dataset import LoopSequenceOnlyDataset, LoopSequenceDataset
 
 def parse_args():
