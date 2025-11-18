@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from vector_quantize_pytorch import VectorQuantize
-from evals.metrics import dihedral_distance
+from .metrics import dihedral_distance
 import json
 from dataclasses import dataclass
 

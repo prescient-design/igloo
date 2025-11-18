@@ -3,8 +3,12 @@ from torch.utils.data import Dataset
 import pandas as pd
 import numpy as np
 import json
-from typing import Sequence, List, Tuple, Union
+from typing import Sequence, List, Tuple, Union, Optional
 import ast
+
+from ibex.loss.aligned_rmsd import CDR_RANGES_AHO, positions_to_backbone_dihedrals, region_mapping
+from ibex.utils import region_mask_from_aho
+from ibex import inference
 
 proteinseq_toks = ['A', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'K', 'L', 'M', 'N', 'P', 'Q', 'R', 'S', 'T', 'V', 'W', 'Y']
 context_segments = ['FW1', 'CDR1', 'FW2', 'CDR2', 'FW3', 'CDR4', 'FW4', 'CDR3', 'FW5']
@@ -313,3 +317,234 @@ class LoopSequenceOnlyDataset(LoopSequenceDataset):
     @staticmethod
     def collate_fn(batch):
         return LoopSequenceDataset.collate_fn(batch)
+
+
+class AhoChainsLoopsDataset(torch.utils.data.Dataset):
+    """
+    Build per-loop items from AHo-aligned heavy/light chains provided in-memory.
+
+    Each input element can be a dict with keys:
+      - id: optional sample id (str)
+      - heavy_aho: AHo-aligned sequence string for heavy (length ~149) or None
+      - light_aho: AHo-aligned sequence string for light (length ~148) or None
+      - heavy_angles: optional dict with keys 'phi','psi','omega' (lists length match heavy_aho)
+      - light_angles: optional dict with keys 'phi','psi','omega' (lists length match light_aho)
+
+    This dataset emits one item per loop (H1,H2,H3,L1,L2,L3), skipping empty loops.
+    """
+
+    def __init__(self, chain_items: List[dict], sequence_only: bool, max_length: int = 36, ibex_model: Optional[object] = None):
+        super().__init__()
+        self.sequence_only = sequence_only
+        self.max_length = max_length
+        self.alphabet = Alphabet(standard_toks=proteinseq_toks)
+        self.ibex_model = ibex_model
+        self.items: List[dict] = []
+
+        for idx, entry in enumerate(chain_items):
+            sample_id = entry.get("id", f"sample{idx}")
+            heavy_aho: Optional[str] = entry.get("heavy_aho")
+            light_aho: Optional[str] = entry.get("light_aho")
+
+            # Precompute loop sequences from AHo using provided CDR ranges
+            def _loop_seq_from_aho(aho_str: Optional[str], chain_label: str, loop_no: str) -> str:
+                if not aho_str:
+                    return ""
+                start, end = CDR_RANGES_AHO[f"{chain_label}{loop_no}"]
+                seg_slice = aho_str[start:end]
+                return seg_slice.replace('-', '')
+
+            # If ibex model is available and we want structural inputs, predict once per pair
+            if not self.sequence_only:
+                if self.ibex_model is None:
+                    raise ValueError("Ibex model is not available. Please provide a model when initializing the dataset.")
+                fv_heavy = heavy_aho.replace('-', '') if heavy_aho else ""
+                fv_light = light_aho.replace('-', '') if light_aho else ""
+
+                if not fv_heavy and not fv_light:
+                    continue
+
+                protein = inference(self.ibex_model, fv_heavy, fv_light, "", logging=False, return_pdb=False)
+
+                # Convert outputs to torch tensors, supporting both numpy arrays and torch tensors
+                pos_src = getattr(protein, 'atom_positions', None)
+                if isinstance(pos_src, np.ndarray):
+                    positions = torch.from_numpy(pos_src).float()  # [L, NAW, 3]
+                elif torch.is_tensor(pos_src):
+                    positions = pos_src.float()
+                else:
+                    positions = torch.tensor(pos_src, dtype=torch.float32)
+                
+                mask_src = getattr(protein, 'atom_mask', None)
+                if isinstance(mask_src, np.ndarray):
+                    mask = torch.from_numpy(mask_src.astype(bool))
+                elif torch.is_tensor(mask_src):
+                    mask = mask_src.bool()
+                else:
+                    mask = torch.tensor(mask_src, dtype=torch.bool)
+                
+                res_src = getattr(protein, 'residue_index', None)
+                residue_index = None
+                if res_src is not None:
+                    if isinstance(res_src, np.ndarray):
+                        residue_index = torch.from_numpy(res_src).long()
+                    elif torch.is_tensor(res_src):
+                        residue_index = res_src.long()
+                    else:
+                        residue_index = torch.tensor(res_src, dtype=torch.long)
+                
+                chain_src = getattr(protein, 'chain_index', None)
+                chain_index = None
+                if chain_src is not None:
+                    if isinstance(chain_src, np.ndarray):
+                        chain_index = torch.from_numpy(chain_src).long()
+                    elif torch.is_tensor(chain_src):
+                        chain_index = chain_src.long()
+                    else:
+                        chain_index = torch.tensor(chain_src, dtype=torch.long)
+
+                dihedrals, dihedrals_mask = positions_to_backbone_dihedrals(positions, mask, residue_index=residue_index, chain_index=chain_index)
+                # dihedrals: [L, 3]
+
+                # Build region mask for mapping residues to loops
+                region_mask = region_mask_from_aho(heavy_aho or "-"*149, light_aho or "")  # [L]
+
+                # Emit items for the six CDR loops
+                for chain_label, region_prefix in (("H", "cdrh"), ("L", "cdrl")):
+                    aho_str = heavy_aho if chain_label == "H" else light_aho
+                    if not aho_str:
+                        continue
+                    for loop_no in ("1", "2", "3"):
+                        loop_region_name = f"{region_prefix}{loop_no}"
+                        if loop_region_name not in region_mapping:
+                            continue
+                        region_idx = region_mapping[loop_region_name]
+
+                        # Loop sequence from AHo (ungapped)
+                        loop_seq = _loop_seq_from_aho(aho_str, chain_label, loop_no)
+                        if len(loop_seq) == 0:
+                            continue
+
+                        loop_id = f"{sample_id}_{chain_label}{loop_no}"
+                        sel = (region_mask == region_idx)
+                        # Extract dihedral angles for selected residues, order preserved
+                        sel_dihedrals = dihedrals[sel]
+                        phi = sel_dihedrals[:, 0].tolist()
+                        psi = sel_dihedrals[:, 1].tolist()
+                        omega = sel_dihedrals[:, 2].tolist()
+
+                        self.items.append({
+                            "sample_id": sample_id,
+                            "loop_id": loop_id,
+                            "chain_label": chain_label,
+                            "loop_label": f"{chain_label}{loop_no}",
+                            "sequence": loop_seq,
+                            "phi": [float(x) for x in phi],
+                            "psi": [float(x) for x in psi],
+                            "omega": [float(x) for x in omega],
+                        })
+            else:
+                # Fallback path: use provided angles dicts or zeros, and slice by CDR ranges
+                for chain_label, aho_str in (("H", heavy_aho), ("L", light_aho)):
+                    if not aho_str:
+                        continue
+                    angles_key = "heavy_angles" if chain_label == "H" else "light_angles"
+                    chain_angles = entry.get(angles_key)
+
+                    for loop_no in ("1", "2", "3"):
+                        start, end = CDR_RANGES_AHO[f"{chain_label}{loop_no}"]
+                        seg_slice = aho_str[start:end]
+                        keep = [i for i, c in enumerate(seg_slice) if c != "-"]
+                        loop_seq = "".join(seg_slice[i] for i in keep)
+                        if len(loop_seq) == 0:
+                            continue
+                        loop_id = f"{sample_id}_{chain_label}{loop_no}"
+
+                        if self.sequence_only or chain_angles is None:
+                            phi = [0.0] * len(loop_seq)
+                            psi = [0.0] * len(loop_seq)
+                            omega = [0.0] * len(loop_seq)
+                        else:
+                            full_phi = chain_angles.get("phi")
+                            full_psi = chain_angles.get("psi")
+                            full_omega = chain_angles.get("omega")
+                            assert full_phi is not None and full_psi is not None and full_omega is not None, "Angles dict must include phi, psi, omega"
+                            seg_phi = full_phi[start:end]
+                            seg_psi = full_psi[start:end]
+                            seg_omega = full_omega[start:end]
+                            phi = [float(seg_phi[i]) for i in keep]
+                            psi = [float(seg_psi[i]) for i in keep]
+                            omega = [float(seg_omega[i]) for i in keep]
+
+                        self.items.append({
+                            "sample_id": sample_id,
+                            "loop_id": loop_id,
+                            "chain_label": chain_label,
+                            "loop_label": f"{chain_label}{loop_no}",
+                            "sequence": loop_seq,
+                            "phi": phi,
+                            "psi": psi,
+                            "omega": omega,
+                        })
+
+    def __len__(self) -> int:
+        return len(self.items)
+
+    def __getitem__(self, i: int) -> dict:
+        rec = self.items[i]
+        seq = rec["sequence"]
+        assert len(seq) <= self.max_length - 2, f"Sequence length {len(seq)} exceeds max length {self.max_length-2}"
+
+        phi = [0.0] + rec["phi"] + [0.0]
+        psi = [0.0] + rec["psi"] + [0.0]
+        omega = [0.0] + rec["omega"] + [0.0]
+
+        angles = torch.tensor([phi, psi, omega], dtype=torch.float32).transpose(0, 1)
+        tokens = torch.tensor([self.alphabet.cls_idx] + [self.alphabet.get_idx(aa) for aa in seq] + [self.alphabet.eos_idx], dtype=torch.long)
+        loop_coords = torch.zeros((len(tokens), 3), dtype=torch.float32)
+        stem_coords = torch.zeros((5, 3), dtype=torch.float32)
+
+        true_tokens = tokens.clone()
+        if len(tokens) < self.max_length:
+            pad = self.max_length - len(tokens)
+            tokens = torch.cat([tokens, torch.full((pad,), self.alphabet.padding_idx, dtype=torch.long)])
+            true_tokens = torch.cat([true_tokens, torch.full((pad,), self.alphabet.padding_idx, dtype=torch.long)])
+            angles = torch.cat([angles, torch.zeros((pad, 3), dtype=torch.float32)])
+            loop_coords = torch.cat([loop_coords, torch.zeros((pad, 3), dtype=torch.float32)])
+
+        angles_mask = torch.zeros((angles.shape[0]), dtype=torch.bool)
+
+        return {
+            "id": rec["loop_id"],
+            "angles": angles,
+            "angles_mask": angles_mask,
+            "sequence": tokens,
+            "true_sequence": true_tokens,
+            "sequence_length": len(seq),
+            "loop_c_alpha_coords": loop_coords,
+            "stem_c_alpha_coords": stem_coords,
+            # No context
+            "context": None,
+        }
+
+    @staticmethod
+    def collate_fn(batch: List[dict]) -> dict:
+        ids = [item['id'] for item in batch]
+        angles = torch.stack([item['angles'] for item in batch])
+        angles_mask = torch.stack([item['angles_mask'] for item in batch])
+        tokens = torch.stack([item['sequence'] for item in batch])
+        true_tokens = torch.stack([item['true_sequence'] for item in batch])
+        sequence_length = torch.tensor([item['sequence_length'] for item in batch], dtype=torch.long)
+        loop_coords = torch.stack([item['loop_c_alpha_coords'] for item in batch])
+        stem_coords = torch.stack([item['stem_c_alpha_coords'] for item in batch])
+        return {
+            'id': ids,
+            'angles': angles,
+            'angles_mask': angles_mask,
+            'sequence': tokens,
+            'true_sequence': true_tokens,
+            'context': None,
+            'sequence_length': sequence_length,
+            'loop_c_alpha_coords': loop_coords,
+            'stem_c_alpha_coords': stem_coords,
+        }

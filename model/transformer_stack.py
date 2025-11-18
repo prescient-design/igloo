@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from torch.nn import LayerNorm
 from .modules import RobertaLMHead, TransformerLayer
-from dataset import Alphabet, proteinseq_toks
+from .dataset import Alphabet, proteinseq_toks
 
 class LoopTransformer(nn.Module):
     def __init__(

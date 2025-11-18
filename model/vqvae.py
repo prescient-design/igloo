@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from vector_quantize_pytorch import VectorQuantize
-from evals.metrics import dihedral_distance_pairwise
-from evals.align_loops import length_independent_dihedral_label
+from .metrics import dihedral_distance_pairwise
+from .align_loops import length_independent_dihedral_label
 import json
 from dataclasses import dataclass
 from .transformer_stack import LoopTransformer

@@ -26,6 +26,10 @@ dependencies = [
     "transformers",
     "datasets",
     "accelerate",
+    "einx",
+    "pyarrow",
+    "multiprocess",
+    "httpx",
 ]
 
 [tool.setuptools]
