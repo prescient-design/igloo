@@ -31,7 +31,7 @@ from transformers.models.bert.modeling_bert import (
 
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from model.vqvae import VQVAE
+from igloo.vqvae import VQVAE
 
 from transformers import BertModel, BertForMaskedLM
 

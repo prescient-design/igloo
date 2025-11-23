@@ -1,0 +1,61 @@
+
+[project]
+name = "prescient-igloo"
+description = "Tokenizing Loops of Antibodies (arXiv:2509.08707)"
+authors = [{name = "Prescient Design"}]
+dynamic = ["version", "readme"]
+requires-python = ">=3.10"
+dependencies = [
+    "torch==2.7.1",
+    "vector-quantize-pytorch==1.22.16",
+    "numpy==1.26.4",
+    "pandas==2.3.0",
+    "scipy==1.15.2",
+    "scikit-learn==1.7.0",
+    "biotite==1.3.0",
+    "seaborn==0.13.2",
+    "faiss-cpu==1.9.0",
+    "logomaker==0.8.7",
+    "dtaidistance==2.3.13",
+    "fastparquet==2024.11.0",
+    "h5py",
+    "tqdm",
+    "matplotlib",
+    "umap-learn",
+    "wandb",
+    "transformers",
+    "datasets",
+    "accelerate",
+    "einx",
+    "pyarrow",
+    "multiprocess",
+    "httpx",
+]
+
+[tool.setuptools]
+packages = ["igloo", "igloo.plm"]
+package-dir = { "igloo" = "model", "igloo.plm" = "finetune_igbert" }
+
+[tool.setuptools.dynamic]
+readme = {file = "README.md", content-type = "text/markdown"}
+
+[build-system]
+requires = ["setuptools >= 65", "setuptools_scm[toml]>=6.2"]
+build-backend = 'setuptools.build_meta'
+
+[dependency-groups]
+dev = [
+    "coverage[toml]>=7.8.0",
+    "ipykernel>=6.29.5",
+    "ipython>=8.35.0",
+    "pip>=25.0.1",
+    "pre-commit>=4.2.0",
+    "pytest>=8.3.5",
+    "ruff>=0.11.5",
+]
+
+[tool.setuptools_scm]
+search_parent_directories = true
+version_scheme = "no-guess-dev"
+local_scheme = "node-and-date"
+fallback_version = "0.0.1"

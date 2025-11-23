@@ -5,8 +5,8 @@ import torch
 import argparse
 import pandas as pd
 
-from model.vqvae import VQVAE
-from dataset import LoopSequenceOnlyDataset, LoopSequenceDataset
+from igloo.vqvae import VQVAE
+from igloo.dataset import LoopSequenceOnlyDataset, LoopSequenceDataset
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Run IgLoo model on loop sequences.")

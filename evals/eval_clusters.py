@@ -1,5 +1,5 @@
 import pandas as pd
-from metrics import get_structure_alignment_score_all_pairs
+from igloo.metrics import get_structure_alignment_score_all_pairs
 import os
 import numpy as np
 import argparse

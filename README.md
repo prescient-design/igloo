@@ -14,28 +14,18 @@ Authors
 
 Clone the repo: `git clone https://github.com/prescient-design/ibex.git`
 
-Python requirements
+Create an environment and install igloo locally
 ```
-micromamba create -n iglooenv python=3.11
-micromamba activate iglooenv
-pip install torch==2.7.1
-pip install vector-quantize-pytorch==1.22.16
-pip install numpy==1.26.4
-pip install pandas==2.3.0
-pip install scipy==1.15.2
-pip install scikit-learn==1.7.0
-pip install biotite==1.3.0
-pip install seaborn==0.13.2
-pip install faiss-cpu==1.9.0
-pip install logomaker==0.8.7
-pip install dtaidistance==2.3.13
-pip install fastparquet==2024.11.0
-pip install h5py
-pip install tqdm
-pip install matplotlib 
-pip install umap-learn
-pip install wandb
+uv venv --python 3.11
+source .venv/bin/activate
+uv pip install -e .
 ```
+
+Alternatively, you can install the `prescient-igloo` package
+```
+pip install prescient-igloo
+```
+which provides the `model/` directory as `import igloo` and the `finetune_igbert/` directory as `import igloo.plm`.
 
 ## :rocket: Run Igloo
 ### For loops with sequences and structures ( :star2: recommended)
@@ -210,4 +200,4 @@ See: `paper_analyses/4_sampled_cdrs/analyse_sampled_cdrs.ipynb`.
 ```
 
 ## :hammer_and_wrench: Support
-Please feel free to contact Ada Fang ([ada_fang@g.harvard.edu](mailto:ada_fang@g.harvard.edu)) of Frédéric Dreyer ([dreyerf1@gene.com](mailto:dreyerf1@gene.com)) for any questions or help with running Igloo.
+Please feel free to contact Ada Fang ([ada_fang@g.harvard.edu](mailto:ada_fang@g.harvard.edu)) of Frédéric Dreyer ([dreyer.frederic@gene.com](mailto:dreyer.frederic@gene.com)) for any questions or help with running Igloo.

@@ -7,7 +7,7 @@ import wandb
 from torch.nn import Module
 from torch.optim import AdamW
 from dataset import LoopSequenceDataset
-from model.vqvae import VQVAE
+from igloo.vqvae import VQVAE
 from trainer import VQVAETrainer, get_save_dir
 from utils import seed_everything
 import json

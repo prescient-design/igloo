@@ -51,8 +51,8 @@ from transformers.utils import check_min_version
 from transformers.utils.versions import require_version
 from transformers import DataCollatorForLanguageModeling
 
-from embedding_model import BertLoopModelForMaskedLM
-from constants import *
+from .embedding_model import BertLoopModelForMaskedLM
+from .constants import *
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.53.0.dev0")
@@ -366,7 +366,7 @@ def tokenize_datasets(raw_datasets, tokenizer, accelerator, args):
     return tokenized_datasets
 
 
-def inference(model, eval_dataloader, tokenizer, temperature, num_samples=1):
+def sampling_inference(model, eval_dataloader, tokenizer, temperature, num_samples=1):
     perplexities = []
     sampled_sequences = defaultdict(list)
     model.eval()
@@ -474,7 +474,7 @@ def main():
     # Prepare everything with our `accelerator`.
     model, eval_dataloader = accelerator.prepare(model, eval_dataloader)
 
-    sampled_sequences, perplexities = inference(model, eval_dataloader, tokenizer, args.sampling_temperature, num_samples=args.num_samples)
+    sampled_sequences, perplexities = sampling_inference(model, eval_dataloader, tokenizer, args.sampling_temperature, num_samples=args.num_samples)
 
     seq_ids = pd.read_parquet(args.validation_file)["seqid"].tolist()
     output_df_list = []

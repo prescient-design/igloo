@@ -60,8 +60,8 @@ from custom_data_collator import DataCollatorForLanguageModelingNoSpecialTokens
 from transformers.utils import check_min_version, send_example_telemetry
 from transformers.utils.versions import require_version
 
-from embedding_model import BertLoopModelForMaskedLM
-from constants import *
+from .embedding_model import BertLoopModelForMaskedLM
+from .constants import *
 
 # Will error if the minimal version of Transformers is not installed. Remove at your own risks.
 check_min_version("4.53.0.dev0")
