@@ -23,7 +23,7 @@ dependencies = [
     "matplotlib",
     "umap-learn",
     "wandb",
-    "transformers",
+    "transformers==4.53.0",
     "datasets",
     "accelerate",
     "einx",
